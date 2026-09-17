@@ -6,6 +6,7 @@ Responsive appointment-system UI built with React, TypeScript, Vite, and Tailwin
 
 ```powershell
 npm.cmd install
+# Copy .env.example to .env.local and enter the Supabase URL and publishable key.
 npm.cmd run dev -- --host 127.0.0.1
 ```
 
@@ -26,7 +27,10 @@ Sprint 0 requirements, confirmed clinic decisions, backlog, security plan, and n
 - `/appointments`: appointment hub
 - `/appointments/book`: five-step booking UI
 - `/appointments/track`: tracking form and status views
-- `/staff/login`: staff login UI
-- `/staff/dashboard`: empty dashboard UI preview
+- `/staff/login`: Supabase staff sign-in
+- `/staff/password`: password recovery and update
+- `/staff/dashboard`: protected staff dashboard and branch-scoped records
 
-The current project is a UI implementation. The original workspace contained no backend logic. Live Supabase booking, scheduling, tracking, and authentication still need integration; no real appointments are created. See [UI-NOTES.md](./UI-NOTES.md) for the data adapter, preview behavior, assets, map-link limitations, and hosting notes.
+Sprint 1 connects Supabase staff authentication, branch authorization, and the published catalogue. Sprint 2 now includes calculated availability, pending requests, staff dentist assignment/confirmation, cancellation/rejection, and reference/mobile tracking. Development booking is enabled with fictional scheduling data; production is not deployed. See [current verification and focused delivery plan](./docs/sprint-2/BOOKING-VERIFICATION.md), [hosted Auth settings](./docs/sprint-1/README.md), and [UI-NOTES.md](./UI-NOTES.md).
+
+Sprint 3 release preparation and current blockers: [delivery board](./docs/sprint-3/README.md) and [Vercel release runbook](./docs/sprint-3/RELEASE.md).
