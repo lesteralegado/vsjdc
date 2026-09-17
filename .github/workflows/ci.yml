@@ -32,5 +32,9 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Release guard tests
+        run: npm run test:release
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Build
         run: npm run build

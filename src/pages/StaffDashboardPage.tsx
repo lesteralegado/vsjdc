@@ -1,34 +1,63 @@
-import { useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import ClinicLogo from '../components/ClinicLogo'
+import StaffAppointmentCard from '../components/StaffAppointmentCard'
+const ScheduleWorkspace = lazy(() => import('../components/ScheduleWorkspace'))
 import BranchDetails from '../components/BranchDetails'
-import { branches, serviceNames } from '../data/clinic'
+import { branches } from '../data/clinic'
+import { demoEnabled, demoAppointmentDate } from '../lib/demo'
+import { useCatalogue } from '../lib/useCatalogue'
+import { getAppointments, listStaff, setStaffAccess, signOut, type StaffContext, type StaffAppointment, type StaffMember } from '../lib/staffApi'
 
-const sections = ['Dashboard', 'Appointments', 'Calendar', 'Dentist Schedules', 'Services', 'Branches']
+const sections = ['Dashboard', 'Pending requests', 'Appointments', 'Calendar', 'Dentist Schedules', 'Services', 'Branches']
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 
-export default function StaffDashboardPage() {
+function StaffAccess({ staff }: { staff: StaffContext }) {
+  const [members, setMembers] = useState<StaffMember[]>([])
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(true)
+  useEffect(() => {
+    let active = true
+    listStaff().then(data => { if (active) setMembers(data) }).catch(() => { if (active) setMessage('Could not load staff access.') }).finally(() => { if (active) setBusy(false) })
+    return () => { active = false }
+  }, [])
+  function edit(userId: string, changes: Partial<StaffMember>) {
+    setMembers(current => current.map(member => member.user_id === userId ? { ...member, ...changes } : member))
+  }
+  async function save(member: StaffMember) {
+    setBusy(true); setMessage('')
+    try { await setStaffAccess(member); setMembers(await listStaff()); setMessage('Staff access saved.') }
+    catch { setMessage('Access could not be saved. Active receptionists need a branch. Refresh and try again.') }
+    finally { setBusy(false) }
+  }
+  return <section className="card p-6"><h2 className="text-xl font-medium">Staff access</h2><p className="muted mt-3 text-sm">Manage existing staff accounts. Your own access cannot be changed here.</p>{message && <p className="notice mt-4" role="status">{message}</p>}{busy && <p role="status" className="mt-4">Please wait…</p>}<div className="mt-6 space-y-5">{members.map(member => <fieldset disabled={busy || member.user_id === staff.user_id} key={member.user_id} className="rounded-xl border border-[#e1e5e9] p-4"><legend className="px-2 font-medium">{member.display_name}{member.user_id === staff.user_id ? ' (you)' : ''}</legend><div className="field-grid"><label>Role<select value={member.role} onChange={e => edit(member.user_id, { role: e.target.value as StaffMember['role'] })}><option value="receptionist">Receptionist</option><option value="admin">Administrator</option></select></label><label className="flex items-center gap-3"><input type="checkbox" checked={member.active} onChange={e => edit(member.user_id, { active: e.target.checked })} />Active account</label></div>{member.role === 'receptionist' && <div className="mt-4 flex flex-wrap gap-5">{staff.branches.map(branch => <label className="flex items-center gap-2" key={branch.id}><input type="checkbox" checked={member.branch_ids.includes(branch.id)} onChange={e => edit(member.user_id, { branch_ids: e.target.checked ? [...member.branch_ids, branch.id] : member.branch_ids.filter(id => id !== branch.id) })} />{branch.name}</label>)}</div>}<button className="btn btn-secondary mt-4" onClick={() => void save(member)}>Save access</button></fieldset>)}</div></section>
+}
+
+export default function StaffDashboardPage({ staff }: { staff: StaffContext }) {
   const [section, setSection] = useState('Dashboard')
-  const [branchId, setBranchId] = useState('cabuyao')
-  const [status, setStatus] = useState('All statuses')
-  const [search, setSearch] = useState('')
-  const [date, setDate] = useState(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()))
-  const branch = branches.find(item => item.id === branchId) || branches[0]
-  const list = <section className="card card-shadow p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-medium">{section === 'Dashboard' ? 'Today’s appointments' : 'Appointments'}</h2><span className="badge">{branch.shortName}</span></div>
-    {section !== 'Dashboard' && <div className="field-grid mt-6"><label>Search appointments<input value={search} onChange={e => setSearch(e.target.value)} placeholder="Name or reference number" /></label><label>Status<select value={status} onChange={e => setStatus(e.target.value)}>{['All statuses', 'Pending', 'Confirmed', 'Checked in', 'Completed', 'Cancelled'].map(item => <option key={item}>{item}</option>)}</select></label></div>}
-    <div className="my-8 flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-[#dde3e8] p-6 text-center"><span className="badge">Schedule preview</span><h3 className="mt-5 font-medium">Your clinic’s day, at a glance</h3><p className="muted mt-3 max-w-md text-sm leading-7">Appointment records will appear here when the clinic system is connected. No patient information is displayed in this preview.</p></div>
-  </section>
-  return <div className="min-h-screen bg-[#f6f7f9] lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
-    <aside className="border-b border-[#e6e8ec] bg-white p-5 lg:sticky lg:top-0 lg:h-screen lg:border-r lg:p-6"><a href="/" className="flex items-center gap-2"><ClinicLogo className="w-14" /><span className="text-xs tracking-wider text-clinic-pink">V. SAN JUAN<span className="mt-1 block text-[8px]">DENTAL CLINIC</span></span></a><p className="muted mt-4 text-xs">Clinic Management</p>
-      <nav aria-label="Staff navigation" className="mt-5 flex flex-wrap gap-2 lg:flex-col">{sections.map(item => <button key={item} type="button" aria-current={section === item ? 'page' : undefined} onClick={() => setSection(item)} className={`rounded-xl px-4 py-3 text-left text-sm transition-colors lg:py-4 ${section === item ? 'bg-[#fff0f5] text-[#c52559]' : 'hover:bg-clinic-mint'}`}>{item}</button>)}</nav>
-      <label className="mt-7 rounded-xl border border-[#e1e5e9] p-3 text-xs muted">Viewing branch<select className="border-0 px-0 py-1 text-sm text-clinic-ink" value={branchId} onChange={e => setBranchId(e.target.value)}>{branches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><a href="/staff/login" className="mt-5 inline-block py-2 text-xs muted underline">Back to staff login</a>
-    </aside>
-    <main className="min-w-0 p-5 sm:p-8 lg:p-10"><div className="notice mb-7"><strong>Dashboard UI preview</strong><p>Live staff access and clinic records are not connected. These screens contain no patient data.</p></div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-5"><div><p className="muted text-sm">{section === 'Dashboard' ? 'Welcome to your clinic' : 'Clinic management'}</p><h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{section === 'Dashboard' ? 'Today’s clinic schedule' : section}</h1></div><a className="btn btn-primary" href="/appointments/book">New appointment</a></div>
-      {section === 'Dashboard' && <><div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">{['Today', 'Pending', 'Confirmed', 'Walk-ins'].map((label, i) => <div className="card card-shadow p-5" key={label}><p aria-label={`${label}: data unavailable`} className={`text-3xl font-bold ${i === 1 ? 'text-clinic-pink' : 'text-[#11785e]'}`}>—</p><p className="muted mt-4 text-sm">{label}</p></div>)}</div><div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">{list}<div className="space-y-6"><section className="card card-shadow p-6"><h2 className="text-lg font-medium">Walk-in availability</h2><p className="muted mt-3 text-sm leading-6">Availability is managed by clinic staff.</p><span className="badge mt-5">Status unavailable</span></section><section className="card card-shadow p-6"><h2 className="text-lg font-medium">Dentist location today</h2><p className="muted mt-4 text-sm leading-7">Branch assignments will appear here when dentist schedules are connected.</p></section></div></div></>}
-      {section === 'Appointments' && list}
-      {section === 'Calendar' && <section className="card p-6"><h2 className="text-xl font-medium">Clinic calendar</h2><div className="mt-5 max-w-sm"><label>Choose a date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label></div><p className="mt-6 text-sm">{date ? new Date(`${date}T12:00:00+08:00`).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'full' }) : 'Select a date'} · {branch.name}</p><p className="muted mt-4 text-sm leading-7">The daily schedule will be available once the clinic system is connected.</p></section>}
-      {section === 'Dentist Schedules' && <section className="card p-6"><h2 className="text-xl font-medium">Dentist schedules · {branch.shortName}</h2><p className="muted mt-4 text-sm leading-7">No live schedules are connected. Dentist names, branch assignments, working hours, and unavailable periods will appear here.</p></section>}
-      {section === 'Services' && <section className="card p-6"><h2 className="text-xl font-medium">Clinic services</h2><p className="muted mt-3 text-sm">Clinic-supplied catalogue · editing is unavailable in preview.</p><ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{serviceNames.map(name => <li className="rounded-xl border border-[#e1e5e9] p-4 text-sm" key={name}>{name}</li>)}</ul></section>}
-      {section === 'Branches' && <div className="grid gap-6 xl:grid-cols-2">{branches.map(item => <section className="card p-6" key={item.id}><BranchDetails branch={item} /></section>)}</div>}
-    </main>
-  </div>
+  const [branchId, setBranchId] = useState(staff.branches[0].id)
+  const [date, setDate] = useState(today)
+  const [status, setStatus] = useState('all')
+  const [appointments, setAppointments] = useState<StaffAppointment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [logoutBusy, setLogoutBusy] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const pendingOnly = section === 'Pending requests'
+  const catalogue = useCatalogue(false)
+  const branch = staff.branches.find(item => item.id === branchId) ?? staff.branches[0]
+  useEffect(() => {
+    let active = true
+    if (!date && !pendingOnly) return
+    getAppointments(branchId, date, pendingOnly).then(data => { if (active) setAppointments(data) }).catch(() => { if (active) setError('Could not load appointments. Check your connection or sign in again.') }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [branchId, date, pendingOnly, refreshVersion])
+  function clearRecords() { setAppointments([]); setLoading(true); setError('') }
+  async function logout() {
+    setLogoutBusy(true); setAppointments([]); setError('')
+    try { await signOut(); location.replace('/staff/login') }
+    catch { setError('Sign out could not be completed. Check your connection and try again.'); setLogoutBusy(false) }
+  }
+  const visible = appointments.filter(item => status === 'all' || item.status === status)
+  const list = <section className="card card-shadow p-5 sm:p-6"><h2 className="text-xl font-medium">{pendingOnly ? 'All pending requests' : 'Appointments'} · {branch.name}</h2>{pendingOnly && <p className="muted mt-3 text-sm">Includes older requests awaiting staff review. Date filtering is not applied.</p>}<button className="mt-3 text-sm underline" onClick={() => { clearRecords(); setRefreshVersion(v => v + 1) }}>Refresh records</button><div className="field-grid mt-5"><label>Date<input required type="date" disabled={pendingOnly} value={date} onChange={e => { clearRecords(); setDate(e.target.value) }} /></label><label>Status<select value={status} onChange={e => setStatus(e.target.value)}>{['all', 'pending', 'confirmed', 'checked_in', 'completed', 'cancelled', 'no_show', 'rejected'].map(value => <option key={value} value={value}>{value === 'all' ? 'All statuses' : value.replaceAll('_', ' ')}</option>)}</select></label></div>{!date && !pendingOnly ? <p className="muted py-8">Select a date.</p> : loading ? <p role="status" className="py-8">Loading appointments…</p> : !error && !visible.length ? <p className="muted py-8">No appointments found for this date and status.</p> : <div className="mt-6 space-y-3">{visible.map(item => <StaffAppointmentCard key={item.id} appointment={item} refresh={() => { clearRecords(); setRefreshVersion(v => v + 1) }} />)}</div>}{appointments.length === 200 && <p className="notice mt-4">Showing the first 200 appointments. Contact your administrator for a full export.</p>}</section>
+  return <div className="min-h-screen bg-[#f6f7f9] lg:grid lg:grid-cols-[250px_minmax(0,1fr)]"><aside className="border-b border-[#e6e8ec] bg-white p-5 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-r lg:p-6"><a href="/" className="flex items-center gap-2"><ClinicLogo className="w-14" /><span className="text-xs tracking-wider text-clinic-pink">V. SAN JUAN<span className="mt-1 block text-[8px]">DENTAL CLINIC</span></span></a><p className="muted mt-4 break-words text-xs">{staff.display_name} · {staff.role}</p><nav aria-label="Staff navigation" className="mt-5 flex flex-wrap gap-2 lg:flex-col">{[...sections, ...(staff.role === 'admin' ? ['Staff Access'] : [])].map(item => <button key={item} aria-current={section === item ? 'page' : undefined} onClick={() => { clearRecords(); setStatus('all'); setSection(item); setRefreshVersion(v => v + 1) }} className={`rounded-xl px-4 py-3 text-left text-sm ${section === item ? 'bg-[#fff0f5] text-[#c52559]' : 'hover:bg-clinic-mint'}`}>{item}</button>)}</nav><label className="mt-7 text-xs">Viewing branch<select value={branchId} onChange={e => { clearRecords(); setBranchId(e.target.value) }}>{staff.branches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button onClick={() => void logout()} disabled={logoutBusy} className="mt-5 py-2 text-sm underline">{logoutBusy ? 'Signing out…' : 'Sign out'}</button></aside><main className="min-w-0 p-5 sm:p-8 lg:p-10"><h1 className="mb-6 text-3xl font-bold">{section}</h1>{demoEnabled && demoAppointmentDate && <div className="notice mb-6"><p>Demo appointments are dated {demoAppointmentDate}. Use new test requests to try staff confirmation. These older examples can be reviewed or rejected.</p><button className="mt-3 underline" onClick={() => { clearRecords(); if (demoAppointmentDate) setDate(demoAppointmentDate); setSection('Appointments') }}>View demo appointments</button></div>}{error && <p role="alert" className="notice mb-6">{error}</p>}{['Dashboard', 'Pending requests', 'Appointments', 'Calendar'].includes(section) && list}{section === 'Dentist Schedules' && <Suspense fallback={<p role="status">Loading scheduling…</p>}><ScheduleWorkspace key={branchId} branchId={branchId} admin={staff.role === 'admin'} /></Suspense>}{section === 'Services' && <section className="card p-6"><h2 className="text-xl font-medium">Published clinic services</h2>{catalogue.loading && <p role="status" className="mt-4">Loading services…</p>}{catalogue.error && <p role="alert" className="notice mt-4">{catalogue.error}</p>}<ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{catalogue.services.map(service => <li key={service.id} className="rounded-xl border border-[#e1e5e9] p-4 text-sm">{service.name}</li>)}</ul></section>}{section === 'Branches' && <div className="grid gap-6 xl:grid-cols-2">{branches.filter(item => staff.branches.some(allowed => allowed.slug === item.id)).map(item => <section className="card p-6" key={item.id}><BranchDetails branch={item} /></section>)}</div>}{section === 'Staff Access' && staff.role === 'admin' && <StaffAccess staff={staff} />}</main></div>
 }

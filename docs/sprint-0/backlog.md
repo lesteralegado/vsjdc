@@ -17,7 +17,7 @@ Priority: P0 = foundation/release blocker, P1 = MVP feature, P2 = later. Status 
 
 ## Sprint 1 candidate commitment
 
-Goal: staff can securely sign in against a local test backend and read only the permitted branch's data; the public service catalogue comes from the database. Hosted staging is deferred by the user's local-only decision.
+Goal: staff can securely sign in and read only the permitted branch's data; the public service catalogue comes from the database. On September 15 the user supplied a dedicated hosted development Supabase project, reopening the backend environment decision. GitHub and production deployment remain deferred. See ../sprint-1/README.md for actual delivery and verification status.
 
 | ID | User story / task | Priority / size | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
@@ -30,6 +30,8 @@ Goal: staff can securely sign in against a local test backend and read only the 
 Do not commit to every candidate if team capacity is insufficient. Start FND-01 → AUTH-01 → AUTH-02, with CAT-01 and OPS-01 included only within capacity. Live booking is Sprint 2, not a hidden addition to Sprint 1.
 
 ## Subsequent MVP backlog
+
+Sprint 2 configuration increment is implemented for review: [delivery board and tests](../sprint-2/README.md). The owner requested configuration screens while actual clinical inputs are unavailable. Update September 16: public availability, atomic pending holds, staff confirmation and tracking are implemented and verified in development. Clinic acceptance and production setup remain open. The owner prioritized completing the essential MVP; see [current delivery plan](../sprint-2/BOOKING-VERIFICATION.md).
 
 | ID | User story / task | Priority / size | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |

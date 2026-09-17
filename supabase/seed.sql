@@ -1,0 +1,2 @@
+-- Clinic-supplied branches/services are installed by the foundation migration.
+-- Do not seed invented dentist profiles, schedules, patients or staff passwords.
