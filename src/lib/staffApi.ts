@@ -38,18 +38,30 @@ export async function setStaffAccess(member: StaffMember) {
   if (error) throw error
 }
 
-export async function getAppointments(branchId: string, date: string, pendingOnly = false) {
-  const start = new Date(`${date}T00:00:00+08:00`)
-  const end = new Date(start.getTime() + 86400000)
-  let query = requireSupabase().from('appointments')
-    .select('id, branch_id, service_id, reference, version, starts_at, ends_at, status, services(name), dentists(name), appointment_contacts(patient_name, mobile, notes)')
-    .eq('branch_id', branchId)
-  query = pendingOnly ? query.eq('status', 'pending') : query.gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString())
-  const { data, error } = await query.order('starts_at').limit(200)
-  if (error) throw error
-  return data
+export const APPOINTMENT_PAGE_SIZE = 25
+export type AppointmentFilters = {
+  page: number; status: string; search: string
 }
-export type StaffAppointment = Awaited<ReturnType<typeof getAppointments>>[number]
+export async function getAppointments(branchId: string, date: string, pendingOnly = false, filters: AppointmentFilters = { page: 0, status: 'all', search: '' }) {
+  const search = filters.search.trim().toUpperCase()
+  let query = requireSupabase().from('appointments')
+    .select('id, branch_id, service_id, reference, version, starts_at, ends_at, status, services(name), dentists(name), appointment_contacts(patient_name, mobile, notes)', { count: 'exact' })
+    .eq('branch_id', branchId)
+  if (pendingOnly) query = query.eq('status', 'pending')
+  else {
+    if (date) {
+      const start = new Date(`${date}T00:00:00+08:00`)
+      query = query.gte('starts_at', start.toISOString()).lt('starts_at', new Date(start.getTime() + 86400000).toISOString())
+    }
+    if (filters.status !== 'all') query = query.eq('status', filters.status)
+  }
+  if (search) query = query.eq('reference', search)
+  const offset = Math.max(0, Math.floor(filters.page)) * APPOINTMENT_PAGE_SIZE
+  const { data, error, count } = await query.order('starts_at').order('id').range(offset, offset + APPOINTMENT_PAGE_SIZE - 1)
+  if (error) throw error
+  return { appointments: data, total: count ?? 0 }
+}
+export type StaffAppointment = Awaited<ReturnType<typeof getAppointments>>['appointments'][number]
 
 export async function appointmentAction(appointment: StaffAppointment, action: string, dentistId?: string) {
   const { error } = await requireSupabase().rpc('appointment_action', { p_id: appointment.id, p_expected: appointment.version, p_action: action, p_dentist: dentistId })
