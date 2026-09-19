@@ -39,6 +39,24 @@ begin
  if (select version from public.appointments where id=id1)<>0 then raise exception 'FAIL rejected assignment did not roll back'; end if;
  perform public.appointment_action(id1,0,'confirm','e1200000-0000-4000-8000-000000000002');
  perform public.appointment_action(id2,0,'confirm','e1200000-0000-4000-8000-000000000001');
+ -- Unrelated shifts can be added while reservations exist.
+ perform public.configure_schedule(branch,'shift',jsonb_build_object('dentist_id','e1200000-0000-4000-8000-000000000001','starts_at',(day+1+time '09:00') at time zone 'Asia/Manila','ends_at',(day+1+time '17:00') at time zone 'Asia/Manila'));
+ select count(*) into count_before from private.schedule_blocks where branch_id=branch;
+ begin
+   perform public.configure_schedule(branch,'block',jsonb_build_object('starts_at',(day+time '09:00') at time zone 'Asia/Manila','ends_at',(day+time '10:00') at time zone 'Asia/Manila','reason','Synthetic conflicting closure'));
+   raise exception 'FAIL conflicting closure accepted';
+ exception when raise_exception then
+   if sqlerrm<>'This change conflicts with an existing appointment. Keep the current schedule or resolve the affected appointments first.' then raise; end if;
+ end;
+ if (select count(*) from private.schedule_blocks where branch_id=branch)<>count_before then raise exception 'FAIL closure not rolled back'; end if;
+ begin
+   perform public.configure_schedule(branch,'remove_shift',jsonb_build_object('id',(select id from private.dentist_shifts where dentist_id='e1200000-0000-4000-8000-000000000001' and starts_at=(day+time '09:00') at time zone 'Asia/Manila')));
+   raise exception 'FAIL reserved shift removed';
+ exception when raise_exception then
+   if sqlerrm<>'This change conflicts with an existing appointment. Keep the current schedule or resolve the affected appointments first.' then raise; end if;
+ end;
+ if not private.capacity_feasible(day) then raise exception 'FAIL reservations invalidated'; end if;
+
  begin perform public.appointment_action(id2,0,'cancel'); raise exception 'FAIL stale version accepted'; exception when raise_exception then if sqlerrm<>'Appointment changed. Refresh before trying again.' then raise; end if; end;
  begin perform private.create_booking(request||jsonb_build_object('requestId',gen_random_uuid())); raise exception 'FAIL dentist double booked'; exception when raise_exception then if sqlerrm<>'This time is no longer available. Choose another time.' then raise; end if; end;
  perform public.appointment_action(id2,1,'cancel');
@@ -54,6 +72,13 @@ begin
  if result->>'ok' is distinct from 'true' or result->'data' is distinct from 'null'::jsonb then raise exception 'FAIL wrong mobile disclosed data: %',result; end if;
  for attempt in 1..14 loop result:=public.booking_gateway('track',jsonb_build_object('reference',second->>'reference','mobile','09170000002')); end loop;
  if result->>'status'<>'429' then raise exception 'FAIL tracking rate limit'; end if;
+
+ result:=public.booking_gateway('track',jsonb_build_object('requestId',(select request_id from private.booking_requests where appointment_id=id1),'mobile','+639170000001'));
+ if result->>'ok' is distinct from 'true' or result->'data'->>'status' is distinct from 'confirmed' or result->'data' ? 'mobile' then raise exception 'FAIL request recovery'; end if;
+ result:=public.booking_gateway('track',jsonb_build_object('requestId',(select request_id from private.booking_requests where appointment_id=id1),'mobile','09170000002'));
+ if result->>'ok' is distinct from 'true' or result->'data' is distinct from 'null'::jsonb then raise exception 'FAIL recovery with wrong mobile'; end if;
+ for attempt in 1..14 loop result:=public.booking_gateway('track',jsonb_build_object('requestId',(select request_id from private.booking_requests where appointment_id=id1),'mobile','09170000002')); end loop;
+ if result->>'status' is distinct from '429' then raise exception 'FAIL recovery rate limit'; end if;
  perform set_config('test.appointment',id1::text,true);
 end $$;
 select set_config('request.jwt.claims','{"sub":"e1000000-0000-4000-8000-000000000002","session_id":"e1100000-0000-4000-8000-000000000002","role":"authenticated"}',true);
@@ -71,4 +96,4 @@ do $$ begin
 end $$;
 reset role;
 rollback;
-select 'PASS: pending holds, idempotency, equipment, mixed eligibility, assignment rollback, stale version, cancellation/rejection release, tracking, rate limits and branch denial' as result;
+select 'PASS: safe schedule edits and conflict rollback, pending holds, idempotency, equipment, mixed eligibility, assignment rollback, stale version, cancellation/rejection release, tracking, rate limits and branch denial' as result;

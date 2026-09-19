@@ -70,7 +70,7 @@ select set_config('request.jwt.claims','{"sub":"61000000-0000-4000-8000-00000000
 set local role authenticated;
 do $$ begin
   begin perform public.configure_schedule(current_setting('test.cabuyao_branch')::uuid,'resource','{"name":"Must not save","capacity":1}'); raise exception 'FAIL: held appointments invalidated';
-  exception when raise_exception then if sqlerrm not like 'Configuration is locked%' then raise; end if; end;
+  exception when raise_exception then if sqlerrm not like 'This change conflicts with an existing appointment.%' then raise; end if; end;
 end $$;
 reset role;
 rollback;

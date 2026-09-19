@@ -4,7 +4,8 @@ import Button from '../components/Buttons'
 import BranchDetails from '../components/BranchDetails'
 import AppointmentDetails from '../components/AppointmentDetails'
 import { branches } from '../data/clinic'
-import { clinicApi, type Appointment, type TimeSlot } from '../lib/clinicApi'
+import { clearAttempt, prepareAttempt, readAttempt, type BookingAttempt } from '../lib/bookingRetry'
+import { clinicApi, PatientRequestError, type Appointment, type TimeSlot } from '../lib/clinicApi'
 import { useCatalogue } from '../lib/useCatalogue'
 
 const steps = ['Clinic location', 'Service & schedule', 'Patient information', 'Review', 'Confirmation']
@@ -21,7 +22,11 @@ export default function BookAppointmentsPage() {
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotError, setSlotError] = useState('')
   const [refresh, setRefresh] = useState(0)
-  const request = useRef({ fingerprint: '', id: crypto.randomUUID() })
+  const [pendingAttempt, setPendingAttempt] = useState<BookingAttempt | null>(() => {
+    try { return readAttempt(sessionStorage) } catch { return null }
+  })
+  const [recoveryMobile, setRecoveryMobile] = useState('')
+  const [recoveryMessage, setRecoveryMessage] = useState('')
   const [patient, setPatient] = useState({ firstName: '', lastName: '', mobile: '', email: '', notes: '' })
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -51,13 +56,34 @@ export default function BookAppointmentsPage() {
     if (!clinicApi.bookingEnabled) { changeStep(4); return }
     if (busy) return
     setBusy(true); setError('')
+    let freshAttempt = false
     try {
       const payload = { branchId, serviceId, slotId, ...patient, mobile: normalizeMobile(patient.mobile), consent }
-      const fingerprint = JSON.stringify(payload)
-      if (request.current.fingerprint !== fingerprint) request.current = { fingerprint, id: crypto.randomUUID() }
-      const result = await clinicApi.book({ ...payload, requestId: request.current.id })
-      setAppointment(result); changeStep(4)
-    } catch (error) { setError(error instanceof Error ? error.message : 'Your request could not be sent. Please retry or contact your branch.') }
+      const saved = await prepareAttempt(sessionStorage, payload)
+      freshAttempt = saved.fresh
+      setPendingAttempt(saved)
+      const result = await clinicApi.book({ ...payload, requestId: saved.id })
+      try { clearAttempt(sessionStorage) } catch { /* Display successful result even if cleanup fails. */ }
+      setPendingAttempt(null); setAppointment(result); changeStep(4)
+    } catch (error) {
+      if (freshAttempt && error instanceof PatientRequestError && error.status >= 400 && error.status < 500) {
+        try { clearAttempt(sessionStorage); setPendingAttempt(null) } catch { /* Keep recovery available. */ }
+      }
+      setError(error instanceof Error ? error.message : 'Your request could not be sent. Please retry or contact your branch.')
+    }
+    finally { setBusy(false) }
+  }
+  async function recover(event: FormEvent) {
+    event.preventDefault()
+    if (busy || !pendingAttempt) return
+    if (!isValidMobile(recoveryMobile)) { setRecoveryMessage('Enter the mobile number used for the previous request.'); return }
+    setBusy(true); setRecoveryMessage('')
+    try {
+      const result = await clinicApi.recover(pendingAttempt.id, normalizeMobile(recoveryMobile))
+      if (!result) { setRecoveryMessage('No matching request found yet. Check the mobile number, wait and retry, or re-enter exactly your original booking details below. Contact the clinic if you are unsure.'); return }
+      try { clearAttempt(sessionStorage) } catch { /* Do not hide the recovered reference. */ }
+      setPendingAttempt(null); setAppointment(result); changeStep(4)
+    } catch { setRecoveryMessage('Could not check the previous request. Please retry before booking again.') }
     finally { setBusy(false) }
   }
   const summary = <dl className="mt-6 space-y-5 text-sm">{[
@@ -69,12 +95,13 @@ export default function BookAppointmentsPage() {
     <div className="mt-7 flex flex-wrap items-start justify-between gap-4"><div><h1 ref={heading} tabIndex={-1} className="scroll-mt-28 text-3xl font-bold tracking-tight outline-none sm:text-4xl">Book an appointment</h1><p className="muted mt-3 text-sm leading-7">Choose your branch, service, date, and time.</p></div><span className="badge badge-pink">Step {step + 1} of 5</span></div>
     <ol aria-label="Booking progress" className="my-7 grid grid-cols-5 gap-2">{steps.map((label, i) => <li key={label} aria-current={step === i ? 'step' : undefined} className={`border-t-[3px] pt-3 text-xs ${i <= step ? 'border-clinic-pink text-[#b92152]' : 'border-[#e3e7eb] muted'}`}><span className="font-semibold">0{i + 1}</span><span className="ml-2 hidden sm:inline">{label}</span></li>)}</ol>
     {!clinicApi.bookingEnabled && <div className="notice mb-6"><strong>Booking preview</strong><p>Online booking is not available yet. You can explore the steps below; no appointment will be sent or reserved. For a visit, please contact your branch.</p></div>}
+    {pendingAttempt && step !== 4 && <form onSubmit={recover} className="notice mb-6 space-y-3" aria-busy={busy}><h2 className="font-semibold">Check your previous request</h2><p>A previous submission may have succeeded. Enter the same mobile number to recover its reference before starting a different booking. Your patient details are not saved in this tab.</p><label>Previous request mobile number<input type="tel" required value={recoveryMobile} onChange={event => setRecoveryMobile(event.target.value)} /></label><Button disabled={busy}>Recover appointment reference</Button>{recoveryMessage && <p role="status">{recoveryMessage}</p>}</form>}
     {step === 4 ? <div className="mx-auto max-w-2xl">{appointment ? <><div className="card mb-6 p-8 text-center"><span className="badge">Request received</span><h2 className="mt-5 text-2xl font-semibold">Thank you for choosing us</h2><p className="muted mt-4 text-sm leading-7">Keep your reference number to track your appointment. Your clinic will confirm the schedule.</p></div><AppointmentDetails appointment={appointment} /><a className="btn btn-primary mt-6 w-full" href="/appointments/track">Track your appointment</a></> : <div className="card p-8 text-center"><span className="badge badge-pink">Preview complete · Not submitted</span><h2 className="mt-5 text-2xl font-semibold">Let’s arrange your visit</h2><p className="muted mt-4 text-sm leading-7">No appointment has been created and no time is reserved. Contact {branch.name} to arrange your visit.</p><div className="mt-6 flex flex-wrap justify-center gap-3">{branch.phones.map(phone => <a key={phone.href} className="btn btn-primary" href={phone.href}>Call {phone.label}</a>)}</div><Button secondary className="mt-4" onClick={() => changeStep(3)}>Back to review</Button></div>}</div> :
     <form onSubmit={next} className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(290px,1fr)]">
       <div className="card card-shadow min-w-0 space-y-7 p-5 sm:p-8">
         {catalogueError && <p role="alert" className="notice">{catalogueError}</p>}
         {step === 0 && <>
-          <fieldset><legend className="mb-4 text-lg font-medium">1. Choose clinic location</legend><div className="field-grid">{branches.map(item => <button type="button" key={item.id} aria-pressed={branchId === item.id} onClick={() => { setBranchId(item.id); clearSlots() }} className={`rounded-xl border p-4 text-left ${branchId === item.id ? 'border-clinic-green bg-clinic-mint ring-1 ring-clinic-green' : 'border-[#dce1e6] hover:bg-[#fafcfc]'}`}><span className="block text-sm font-medium">{item.name}</span><span className="muted mt-2 block text-xs">{branchId === item.id ? '✓ Selected' : 'Select this branch'}</span></button>)}</div></fieldset>
+          <fieldset><legend className="mb-4 text-lg font-medium">1. Choose clinic location</legend><div className="field-grid">{branches.map(item => <button type="button" key={item.id} aria-pressed={branchId === item.id} onClick={() => { if (item.id !== branchId) { setBranchId(item.id); clearSlots() } }} className={`rounded-xl border p-4 text-left ${branchId === item.id ? 'border-clinic-green bg-clinic-mint ring-1 ring-clinic-green' : 'border-[#dce1e6] hover:bg-[#fafcfc]'}`}><span className="block text-sm font-medium">{item.name}</span><span className="muted mt-2 block text-xs">{branchId === item.id ? '✓ Selected' : 'Select this branch'}</span></button>)}</div></fieldset>
           <div className="rounded-xl bg-[#f7faf9] p-5"><BranchDetails branch={branch} compact /></div>
         </>}
         {step === 1 && <>

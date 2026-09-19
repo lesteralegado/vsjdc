@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "check:release": "node scripts/check-release.mjs",
-    "test:release": "node --test scripts/release-config.test.mjs",
+    "test:release": "node --test scripts/release-config.test.mjs scripts/booking-retry.test.mjs",
     "build:release": "npm run check:release && npm run lint && npm run test:release && npm run build"
   },
   "dependencies": {

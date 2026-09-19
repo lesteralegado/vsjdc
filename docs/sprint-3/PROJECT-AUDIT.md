@@ -1,5 +1,7 @@
 # Project readiness audit — September 17, 2026
 
+Update: see FIX-CHECKLIST.md for fixes implemented after this dated audit. Findings below record the audit baseline.
+
 Verdict: suitable for development demonstration; not ready for real-patient production launch. This review adds findings, not functional changes. No clinic data or features were deleted.
 
 Scope: local React application, API adapter, staff authorization, scheduling/booking migrations, Edge gateway, deployment configuration, CI, GitHub branch state, live development configuration and security advisors. Hosted Vercel settings/logs and the protected deployment remain inaccessible through the connected account. This is not a penetration test or a claim that every execution path is covered.
