@@ -178,6 +178,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      move_appointment: {
+        Args: { p_id: string; p_expected: number; p_start: string; p_dentist: string; p_reason: string }
+        Returns: Json
+      }
       appointment_action: {
         Args: {
           p_action: string

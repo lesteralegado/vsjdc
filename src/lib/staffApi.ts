@@ -67,3 +67,11 @@ export async function appointmentAction(appointment: StaffAppointment, action: s
   const { error } = await requireSupabase().rpc('appointment_action', { p_id: appointment.id, p_expected: appointment.version, p_action: action, p_dentist: dentistId })
   if (error) throw new Error(['P0001', '42501'].includes(error.code) ? error.message : 'Could not update this appointment. Refresh and try again.')
 }
+
+export async function moveAppointment(appointment: StaffAppointment, startsAt: string, dentistId: string, reason: string) {
+  const { error } = await requireSupabase().rpc('move_appointment', {
+    p_id: appointment.id, p_expected: appointment.version, p_start: startsAt,
+    p_dentist: dentistId, p_reason: reason.trim(),
+  })
+  if (error) throw new Error(['P0001', '42501'].includes(error.code) ? error.message : 'Could not confirm the change. Refresh records before trying again.')
+}

@@ -11,7 +11,7 @@ Work in order. Each item needs implementation, verification and a brief review b
 | 5 | Fix selected-branch loading and keep tracking available during booking closure (A09/A12) | Same-branch browser check passed; tracking flag separated | Back/select same branch does not stall; tracking works when new booking is disabled. |
 | 6 | Recover uncertain booking submissions across reloads (A10) | Done in development ? storage tests, SQL and browser recovery passed | Lost-response retry does not create another request or persist unnecessary patient data. |
 | 7 | Paginate and search appointments; simplify duplicate navigation (A11) | Implemented; query regression passed, browser acceptance pending | Staff can reach all pending requests; no fake Calendar/export promise. |
-| 8 | Add safe staff rescheduling/reassignment (A13) | To do | Failed move retains original reservation; successful move releases old slot atomically. |
+| 8 | Add safe staff rescheduling/reassignment (A13) | Implemented in development; SQL and isolated browser checks passed | Failed move retains original reservation; successful move releases old slot atomically. |
 | 9 | Strengthen public booking abuse controls and measure capacity limits (A06/A14) | To do | Verify bot checks server-side; rate controls and expected clinic load tested. |
 | 10 | Replace demo configuration and verify branch details (A05/A15) | Needs clinic inputs | Approved dentists/hours/durations/capacity/future shifts and exact map pins; no production dummy records. |
 | 11 | Complete recovery/security/privacy setup (A07/A16) | Needs hosted setup and clinic decisions | Real authorized recovery roundtrip, supported password protection, privacy/retention procedure. |
@@ -29,3 +29,14 @@ Keep optional reports, automated reminders, uploads, payments and cosmetic refin
 - No emails were sent. Production rollout, Vercel preview verification and real clinic acceptance remain open.
 
 - Item 7: 25-record pages with exact totals and stable time/ID ordering replace the 200-record cap. Full-reference search and status/date filters run in the database query, retaining branch filtering and existing RLS. Pending requests include every date. Duplicate Dashboard/Calendar entries and the unavailable export promise were removed; the dashboard URL remains unchanged. Query regression checks cover 226 synthetic responses, filters and Manila date boundaries. These checks mock HTTP responses; authenticated browser pagination remains an acceptance check.
+
+## Staff rescheduling verification ? September 19
+
+- Staff can change the time and/or dentist of pending or confirmed appointments within the same branch. Reference, service, patient details and status are preserved. Pending requests still require a separate staff confirmation.
+- The form requires a reason and a review step; dates explicitly use Philippine time. Staff should agree on changes with the patient before saving. No notifications are sent automatically.
+- The database uses the existing shared scheduling lock, current staff/session/branch checks and expected appointment version. Conflicts roll back the appointment, resource snapshot and audit changes together. Successful moves free the old slot and reserve the new slot. Rescheduling uses current duration/resources/lead time/window; same-time reassignment preserves the existing duration/resource snapshot.
+- `supabase/tests/staff_rescheduling.sql` passed against development: resource conflict rollback, old/new capacity, eligible coverage for the full duration, reassignment snapshots, pending/confirmed status, stale updates, future-time/state validation, audit details, authenticated success, and branch/anonymous denial. All fixtures rolled back. The existing booking regression suite also passed.
+- Local synthetic browser responses verified review/save, the Philippine-time RPC payload, refresh on success, preserved inputs and an error on conflict, and mobile (390px) and desktop (1440px) layouts. This is component verification, not a live authenticated browser-to-database test.
+- Automatic approval review rejected persistent temporary administrator creation for browser testing. No account was created. A read-only cleanup check confirmed zero test accounts/appointments. A live authenticated browser acceptance check remains open.
+- Build, lint and all eight release tests passed. Security advisors still report the previously documented disabled leaked-password protection and intentional deny-by-default private-table policies; this migration added no new advisory category.
+- Migration: `20260919093154_staff_rescheduling.sql`, applied to development only. Cross-branch transfers and service changes are outside this change.
