@@ -27,7 +27,7 @@ export interface ClinicApi {
   getServices(): Promise<Service[]>
   getDentists(branchId?: string): Promise<Dentist[]>
   getSlots(branchId: string, serviceId: string, date: string): Promise<TimeSlot[]>
-  book(request: BookingRequest): Promise<Appointment>
+  book(request: BookingRequest, verificationToken: string): Promise<Appointment>
   track(reference: string, mobile: string): Promise<Appointment | null>
   recover(requestId: string, mobile: string): Promise<Appointment | null>
   signIn(email: string, password: string): Promise<void>
@@ -37,10 +37,10 @@ export class PatientRequestError extends Error {
   status: number
   constructor(message: string, status: number) { super(message); this.status = status }
 }
-async function patientRequest<T>(action: string, data: unknown): Promise<T> {
+async function patientRequest<T>(action: string, data: unknown, verificationToken?: string): Promise<T> {
   const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/appointment-api`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
-    body: JSON.stringify({ action, data }), signal: AbortSignal.timeout(20000),
+    body: JSON.stringify({ action, data, verificationToken }), signal: AbortSignal.timeout(30000),
   })
   const result = await response.json()
   if (!response.ok) throw new PatientRequestError(result.error || 'Request could not be completed. Please retry.', response.status)
@@ -61,7 +61,7 @@ export const clinicApi: ClinicApi = {
     return data.map(row => ({ id: row.id, name: row.name, about: row.about, photoUrl: row.photo_url ?? undefined }))
   },
   getSlots: (branchId, serviceId, date) => patientRequest<TimeSlot[]>('availability', { branchId, serviceId, date }),
-  book: request => patientRequest<Appointment>('book', request),
+  book: (request, verificationToken) => patientRequest<Appointment>('book', request, verificationToken),
   track: (reference, mobile) => patientRequest<Appointment | null>('track', { reference, mobile }),
   recover: (requestId, mobile) => patientRequest<Appointment | null>('track', { requestId, mobile }),
   signIn,

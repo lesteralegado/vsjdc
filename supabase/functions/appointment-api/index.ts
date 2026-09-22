@@ -1,3 +1,5 @@
+import { verifyBookingToken } from './turnstile.ts'
+
 // The publishable key identifies this public application;
 // reference+mobile authorize tracking. It is not a staff-authentication mechanism.
 const projectUrl = Deno.env.get('SUPABASE_URL')
@@ -49,6 +51,10 @@ Deno.serve(async (request: Request) => {
     const url = Deno.env.get('SUPABASE_URL')
     const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     if (!url || !secret) return reply(503, { error: 'Appointment service is not configured' })
+    if (input.action === 'book') {
+      const status = await verifyBookingToken(input.verificationToken, Deno.env.get('TURNSTILE_SECRET_KEY'), new Set([...origins].map(value => new URL(value).hostname)))
+      if (status !== 200) return reply(status, { error: status === 403 ? 'Please complete the security check again.' : 'Security verification is unavailable. Please retry or contact the clinic.' })
+    }
     const response = await fetch(`${url}/rest/v1/rpc/booking_gateway`, {
       method: 'POST', headers: { apikey: secret, Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_action: input.action, p_data: input.data }), signal: AbortSignal.timeout(15000),

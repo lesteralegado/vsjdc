@@ -12,7 +12,7 @@ Work in order. Each item needs implementation, verification and a brief review b
 | 6 | Recover uncertain booking submissions across reloads (A10) | Done in development ? storage tests, SQL and browser recovery passed | Lost-response retry does not create another request or persist unnecessary patient data. |
 | 7 | Paginate and search appointments; simplify duplicate navigation (A11) | Implemented; query regression passed, browser acceptance pending | Staff can reach all pending requests; no fake Calendar/export promise. |
 | 8 | Add safe staff rescheduling/reassignment (A13) | Implemented in development; SQL and isolated browser checks passed | Failed move retains original reservation; successful move releases old slot atomically. |
-| 9 | Strengthen public booking abuse controls and measure capacity limits (A06/A14) | To do | Verify bot checks server-side; rate controls and expected clinic load tested. |
+| 9 | Strengthen public booking abuse controls and measure capacity limits (A06/A14) | Implemented locally; activation and representative load acceptance pending | Verify bot checks server-side; rate controls and expected clinic load tested. |
 | 10 | Replace demo configuration and verify branch details (A05/A15) | Needs clinic inputs | Approved dentists/hours/durations/capacity/future shifts and exact map pins; no production dummy records. |
 | 11 | Complete recovery/security/privacy setup (A07/A16) | Needs hosted setup and clinic decisions | Real authorized recovery roundtrip, supported password protection, privacy/retention procedure. |
 | 12 | Fresh database replay, restore drill and deployment acceptance (A07) | To do | Isolated rebuild/restore succeeds; protected preview tested; clinic approves production launch and rollback procedure. |
@@ -40,3 +40,12 @@ Keep optional reports, automated reminders, uploads, payments and cosmetic refin
 - Automatic approval review rejected persistent temporary administrator creation for browser testing. No account was created. A read-only cleanup check confirmed zero test accounts/appointments. A live authenticated browser acceptance check remains open.
 - Build, lint and all eight release tests passed. Security advisors still report the previously documented disabled leaked-password protection and intentional deny-by-default private-table policies; this migration added no new advisory category.
 - Migration: `20260919093154_staff_rescheduling.sql`, applied to development only. Cross-branch transfers and service changes are outside this change.
+
+## Booking protection ? September 22
+
+- Added a Turnstile widget and server-side verification of success, action and allowed hostname, without persisting tokens or changing booking fingerprints. Tracking remains independent. Missing configuration fails closed for new submissions.
+- Build, lint and all 10 automated tests passed. The API test uses synthetic provider responses to cover missing configuration/tokens, expiration/replay rejection, wrong hostname/action, provider outage, successful forwarding without the token, and tracking without verification.
+- Cloudflare's actual public test widget passed in the local browser at 320px and 1440px widths, including remount after simulated submission. The button was disabled while acquiring a replacement token. These test keys were process-local, not saved to `.env.local` or deployed.
+- Development SQL measured 20/40/60-held-appointment schedules, the 61-job rejection, search-budget exhaustion, and mobile/global rate boundaries. Every fixture and counter change rolled back. See [booking protection setup and measurements](BOOKING-PROTECTION.md) for timings and limitations.
+- The 60-active-appointment bound is shared across both branches per day, not per branch. Actual expected clinic demand and concurrent network-load acceptance are still outstanding.
+- No Edge Function deployment or Vercel publication occurred. The owner must configure `VITE_TURNSTILE_SITE_KEY` and the server-only `TURNSTILE_SECRET_KEY` before coordinated preview deployment and a real protected booking acceptance test. Existing hosted endpoints still use their previous protection.

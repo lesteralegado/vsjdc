@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { mobilePattern, isValidMobile, normalizeMobile } from '../lib/validation'
 import Button from '../components/Buttons'
+import BookingSecurityCheck from '../components/BookingSecurityCheck'
 import BranchDetails from '../components/BranchDetails'
 import AppointmentDetails from '../components/AppointmentDetails'
 import { branches } from '../data/clinic'
@@ -30,6 +31,8 @@ export default function BookAppointmentsPage() {
   const [patient, setPatient] = useState({ firstName: '', lastName: '', mobile: '', email: '', notes: '' })
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [verificationToken, setVerificationToken] = useState('')
+  const [securityRevision, setSecurityRevision] = useState(0)
   const [error, setError] = useState('')
   const [appointment, setAppointment] = useState<Appointment | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -55,6 +58,7 @@ export default function BookAppointmentsPage() {
     if (step < 3) { changeStep(step + 1); return }
     if (!clinicApi.bookingEnabled) { changeStep(4); return }
     if (busy) return
+    if (!verificationToken) { setError('Complete the security check before submitting.'); return }
     setBusy(true); setError('')
     let freshAttempt = false
     try {
@@ -62,7 +66,7 @@ export default function BookAppointmentsPage() {
       const saved = await prepareAttempt(sessionStorage, payload)
       freshAttempt = saved.fresh
       setPendingAttempt(saved)
-      const result = await clinicApi.book({ ...payload, requestId: saved.id })
+      const result = await clinicApi.book({ ...payload, requestId: saved.id }, verificationToken)
       try { clearAttempt(sessionStorage) } catch { /* Display successful result even if cleanup fails. */ }
       setPendingAttempt(null); setAppointment(result); changeStep(4)
     } catch (error) {
@@ -71,7 +75,7 @@ export default function BookAppointmentsPage() {
       }
       setError(error instanceof Error ? error.message : 'Your request could not be sent. Please retry or contact your branch.')
     }
-    finally { setBusy(false) }
+    finally { setBusy(false); setVerificationToken(''); setSecurityRevision(value => value + 1) }
   }
   async function recover(event: FormEvent) {
     event.preventDefault()
@@ -120,8 +124,9 @@ export default function BookAppointmentsPage() {
           ['firstName', 'First name', 'text', 'given-name'], ['lastName', 'Last name', 'text', 'family-name'], ['mobile', 'Mobile number', 'tel', 'tel'], ['email', 'Email address (optional)', 'email', 'email'],
         ] as const).map(([key, label, type, autoComplete]) => <label key={key}>{label}<input required={key !== 'email'} type={type} autoComplete={autoComplete} maxLength={key === 'mobile' ? 20 : 120} pattern={key === 'mobile' ? mobilePattern : undefined} value={patient[key]} onChange={e => setPatient({ ...patient, [key]: e.target.value })} /></label>)}</div><label>Anything you’d like us to know? <span className="muted font-normal">(optional)</span><textarea rows={3} maxLength={1000} value={patient.notes} onChange={e => setPatient({ ...patient, notes: e.target.value })} placeholder="Share any preferences for your visit." /></label></>}
         {step === 3 && <><h2 className="text-xl font-medium">Review your appointment</h2><p className="muted text-sm leading-6">Please check your details before continuing.</p>{summary}<div className="border-t border-[#e5e8ec] pt-6"><h3 className="font-medium">Patient information</h3><p className="mt-3 break-words text-sm">{patient.firstName} {patient.lastName}</p><p className="muted mt-2 break-words text-sm">{patient.mobile}</p>{patient.email && <p className="muted mt-2 break-words text-sm">{patient.email}</p>}{patient.notes && <p className="muted mt-4 whitespace-pre-wrap break-words text-sm">{patient.notes}</p>}<button type="button" onClick={() => changeStep(2)} className="mt-3 py-2 text-sm text-[#11785e] underline">Edit patient details</button></div><label className="flex items-start gap-3"><input required type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /><span className="text-xs leading-6">{clinicApi.bookingEnabled ? 'I confirm that my details are correct and agree to the clinic using this information to arrange my appointment.' : 'I understand this is a preview. No appointment will be submitted or time reserved.'}</span></label></>}
+        {step === 3 && clinicApi.bookingEnabled && <BookingSecurityCheck key={securityRevision} onToken={setVerificationToken} />}
         {error && <p role="alert" className="notice">{error}</p>}
-        <div className="flex flex-wrap justify-between gap-3 border-t border-[#edf0f2] pt-5">{step > 0 ? <Button type="button" secondary onClick={() => changeStep(step - 1)} disabled={busy}>Back</Button> : <a className="btn btn-secondary" href="/appointments">Cancel</a>}<Button type="submit" disabled={busy}>{busy ? 'Sending request…' : step === 3 ? (clinicApi.bookingEnabled ? 'Send appointment request' : 'Finish preview') : 'Continue →'}</Button></div>
+        <div className="flex flex-wrap justify-between gap-3 border-t border-[#edf0f2] pt-5">{step > 0 ? <Button type="button" secondary onClick={() => changeStep(step - 1)} disabled={busy}>Back</Button> : <a className="btn btn-secondary" href="/appointments">Cancel</a>}<Button type="submit" disabled={busy || (step === 3 && clinicApi.bookingEnabled && !verificationToken)}>{busy ? 'Sending request…' : step === 3 ? (clinicApi.bookingEnabled ? 'Send appointment request' : 'Finish preview') : 'Continue →'}</Button></div>
       </div>
       <aside className="card card-shadow min-w-0 p-6 lg:sticky lg:top-28"><h2 className="text-xl font-medium">Appointment summary</h2>{summary}<p className="mt-6 border-t border-[#edf0f2] pt-4 text-xs leading-6 muted">All times are in Philippine time. Your appointment is subject to clinic confirmation.</p><a href={branch.phones[0].href} className="mt-4 block text-sm text-[#11785e] underline">Need help? Call {branch.shortName}</a></aside>
     </form>}
