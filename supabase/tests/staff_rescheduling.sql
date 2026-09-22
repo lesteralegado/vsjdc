@@ -1,6 +1,7 @@
 -- All fixtures and configuration edits roll back.
 begin;
 select pg_advisory_xact_lock(739201,2);
+update private.booking_settings set enabled=true;
 insert into auth.users(id) values('f4100000-0000-4000-8000-000000000001'),('f4100000-0000-4000-8000-000000000002');
 insert into auth.sessions(id,user_id) values('f4200000-0000-4000-8000-000000000001','f4100000-0000-4000-8000-000000000001'),('f4200000-0000-4000-8000-000000000002','f4100000-0000-4000-8000-000000000002');
 insert into private.staff_accounts(user_id,display_name,role) values('f4100000-0000-4000-8000-000000000001','Synthetic move admin','admin'),('f4100000-0000-4000-8000-000000000002','Synthetic move receptionist','receptionist');
@@ -17,8 +18,8 @@ begin
  select id into b from public.branches where slug='santa-rosa';
  select id into s from public.services where name='Oral Prophylaxis';
  t:=(day+time '09:00') at time zone 'Asia/Manila';
- update private.branch_schedule_settings set opening_days=array[0,1,2,3,4,5,6],opens_at='09:00',closes_at='18:00',chairs=2,lead_minutes=0,horizon_days=60,step_minutes=30 where branch_id=b;
- update private.branch_service_settings set duration_minutes=30,buffer_minutes=15,enabled=true where branch_id=b and service_id=s;
+ insert into private.branch_schedule_settings values(b,array[0,1,2,3,4,5,6],'09:00','18:00',2,0,60,30) on conflict(branch_id) do update set opening_days=excluded.opening_days,opens_at=excluded.opens_at,closes_at=excluded.closes_at,chairs=excluded.chairs,lead_minutes=excluded.lead_minutes,horizon_days=excluded.horizon_days,step_minutes=excluded.step_minutes;
+ insert into private.branch_service_settings values(b,s,30,15,true) on conflict(branch_id,service_id) do update set duration_minutes=excluded.duration_minutes,buffer_minutes=excluded.buffer_minutes,enabled=true;
  insert into private.dentist_eligibility values(d1,s),(d2,s);
  insert into private.dentist_shifts(dentist_id,branch_id,starts_at,ends_at) values(d1,b,t,t+interval '8 hours'),(d2,b,t,t+interval '8 hours'),(d1,b,t+interval '1 day',t+interval '1 day 8 hours');
  insert into private.branch_resources(id,branch_id,name,capacity) values(resource,b,'Synthetic exclusive resource',1);

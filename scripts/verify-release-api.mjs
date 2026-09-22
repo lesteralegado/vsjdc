@@ -16,7 +16,7 @@ const wrongOrigin = await fetch(endpoint, { method: 'OPTIONS', headers: { ...hea
 assert.equal(wrongOrigin.status, 403)
 const invalidKey = await fetch(endpoint, { method: 'POST', headers: { ...headers, apikey: 'invalid' }, body: '{}', signal: AbortSignal.timeout(15000) })
 assert.equal(invalidKey.status, 401)
-const track = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ action: 'track', data: { reference: 'VSJ-00000000000000000000000000000000', mobile: '09170000999' } }), signal: AbortSignal.timeout(15000) })
+const track = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ action: 'track', data: { reference: 'VSJ-' + crypto.randomUUID().replaceAll('-', '').toUpperCase(), mobile: '09170000999' } }), signal: AbortSignal.timeout(15000) })
 assert.equal(track.status, 200)
 assert.deepEqual(await track.json(), { data: null })
 assert.equal(track.headers.get('cache-control'), 'no-store')

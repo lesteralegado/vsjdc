@@ -10,12 +10,12 @@ Work in order. Each item needs implementation, verification and a brief review b
 | 4 | Give staff patient contact details (A04) | Done in development ? staff phone links checked | Authorized staff can call the patient; branch restrictions remain enforced. |
 | 5 | Fix selected-branch loading and keep tracking available during booking closure (A09/A12) | Same-branch browser check passed; tracking flag separated | Back/select same branch does not stall; tracking works when new booking is disabled. |
 | 6 | Recover uncertain booking submissions across reloads (A10) | Done in development ? storage tests, SQL and browser recovery passed | Lost-response retry does not create another request or persist unnecessary patient data. |
-| 7 | Paginate and search appointments; simplify duplicate navigation (A11) | Implemented; query regression passed, browser acceptance pending | Staff can reach all pending requests; no fake Calendar/export promise. |
+| 7 | Paginate and search appointments; simplify duplicate navigation (A11) | SQL RLS/pagination and isolated browser checks passed; hosted acceptance pending | Staff can reach all pending requests; no fake Calendar/export promise. |
 | 8 | Add safe staff rescheduling/reassignment (A13) | Implemented in development; SQL and isolated browser checks passed | Failed move retains original reservation; successful move releases old slot atomically. |
 | 9 | Strengthen public booking abuse controls and measure capacity limits (A06/A14) | Implemented locally; activation and representative load acceptance pending | Verify bot checks server-side; rate controls and expected clinic load tested. |
 | 10 | Replace demo configuration and verify branch details (A05/A15) | Needs clinic inputs | Approved dentists/hours/durations/capacity/future shifts and exact map pins; no production dummy records. |
 | 11 | Complete recovery/security/privacy setup (A07/A16) | Needs hosted setup and clinic decisions | Real authorized recovery roundtrip, supported password protection, privacy/retention procedure. |
-| 12 | Fresh database replay, restore drill and deployment acceptance (A07) | To do | Isolated rebuild/restore succeeds; protected preview tested; clinic approves production launch and rollback procedure. |
+| 12 | Fresh database replay, restore drill and deployment acceptance (A07) | Replay CI prepared; execution/restore/acceptance pending | Isolated rebuild/restore succeeds; protected preview tested; clinic approves production launch and rollback procedure. |
 
 Keep optional reports, automated reminders, uploads, payments and cosmetic refinements outside this checklist. Do not merge the preview branch into production just because the frontend builds.
 
@@ -49,3 +49,15 @@ Keep optional reports, automated reminders, uploads, payments and cosmetic refin
 - Development SQL measured 20/40/60-held-appointment schedules, the 61-job rejection, search-budget exhaustion, and mobile/global rate boundaries. Every fixture and counter change rolled back. See [booking protection setup and measurements](BOOKING-PROTECTION.md) for timings and limitations.
 - The 60-active-appointment bound is shared across both branches per day, not per branch. Actual expected clinic demand and concurrent network-load acceptance are still outstanding.
 - No Edge Function deployment or Vercel publication occurred. The owner must configure `VITE_TURNSTILE_SITE_KEY` and the server-only `TURNSTILE_SECRET_KEY` before coordinated preview deployment and a real protected booking acceptance test. Existing hosted endpoints still use their previous protection.
+
+## Technical completion work ? September 22
+
+- Added a disposable Supabase migration replay job and `npm run test:database`. Tests no longer depend on existing demo branch/service/equipment settings. The local runner accepts no hosted connection URL and checks an empty clinic database with booking closed before/after regression tests. Docker is absent here; fresh replay remains unverified.
+- The new SQL pagination test passed with 226 records, checking final pages, stable ordering, exact reference lookup, status filtering, branch isolation and revoked-session denial. The browser fixture reached page 10 and record 226, searched record 210 and had no overflow at 320px.
+- Tracking now clears the previous result when lookup details change and locks lookup fields during an in-flight request. Local browser tests passed for loading, found, not-found and network-error states with new booking disabled.
+- Added a page-error recovery boundary; forced-render-failure browser check displayed reload, appointment and clinic-contact actions at mobile width instead of a blank page.
+- Added a read-only production-readiness report. Development passes branch/admin/basic configuration and RPC access checks, but still contains demo data and has no future eligible dentist shifts. These are recorded as setup gaps, not silently replaced.
+- Retired the old hosted-mutating booking smoke flow in favor of a non-booking bot-enforcement check. Hosted signup/CORS/key/tracking privacy/cache-header checks passed. Full dependency audit reported zero vulnerabilities.
+- Owner tasks are consolidated in [OWNER-SETUP.md](OWNER-SETUP.md). GitHub still reported public; nothing was published and no production deployment occurred.
+
+- Final verification for this batch: all seven SQL files passed against development with rollback; build, lint and 10 release tests passed. Browser fixtures are absent from the production `dist` output. Fresh-stack CI remains prepared but unexecuted.

@@ -9,12 +9,15 @@ insert into private.staff_branches select 'e1000000-0000-4000-8000-000000000002'
 insert into public.dentists(id,name) values('e1200000-0000-4000-8000-000000000001','QA multi-service dentist'),('e1200000-0000-4000-8000-000000000002','QA whitening dentist');
 insert into private.dentist_rules values('e1200000-0000-4000-8000-000000000001',60,true),('e1200000-0000-4000-8000-000000000002',60,true);
 do $$
-declare branch uuid; oral uuid; white uuid; day date:=(now() at time zone 'Asia/Manila')::date+2; request jsonb; result jsonb; second jsonb; id1 uuid; id2 uuid; ref text; candidate jsonb; count_before integer;
+declare branch uuid; oral uuid; white uuid; day date:=(now() at time zone 'Asia/Manila')::date+2; request jsonb; result jsonb; second jsonb; id1 uuid; id2 uuid; ref text; candidate jsonb; count_before integer; equipment uuid:=gen_random_uuid();
 begin
  select id into branch from public.branches where slug='santa-rosa';
  select id into oral from public.services where name='Oral Prophylaxis'; select id into white from public.services where name='Teeth Whitening';
- update private.branch_schedule_settings set chairs=3,lead_minutes=0,horizon_days=30,step_minutes=30 where branch_id=branch;
- update private.branch_service_settings set duration_minutes=30,buffer_minutes=15,enabled=true where branch_id=branch and service_id in (oral,white);
+ insert into private.branch_schedule_settings values(branch,array[0,1,2,3,4,5,6],'09:00','20:00',3,0,30,30) on conflict(branch_id) do update set opening_days=excluded.opening_days,opens_at=excluded.opens_at,closes_at=excluded.closes_at,chairs=excluded.chairs,lead_minutes=excluded.lead_minutes,horizon_days=excluded.horizon_days,step_minutes=excluded.step_minutes;
+ insert into private.branch_service_settings values(branch,oral,30,15,true),(branch,white,30,15,true) on conflict(branch_id,service_id) do update set duration_minutes=excluded.duration_minutes,buffer_minutes=excluded.buffer_minutes,enabled=true;
+ delete from private.service_resources where branch_id=branch and service_id in (oral,white);
+ insert into private.branch_resources(id,branch_id,name,capacity) values(equipment,branch,'Synthetic booking equipment',1);
+ insert into private.service_resources values(branch,white,equipment,1);
  insert into private.dentist_eligibility values('e1200000-0000-4000-8000-000000000001',oral),('e1200000-0000-4000-8000-000000000001',white),('e1200000-0000-4000-8000-000000000002',white);
  insert into private.dentist_shifts(dentist_id,branch_id,starts_at,ends_at) values
  ('e1200000-0000-4000-8000-000000000001',branch,(day+time '09:00') at time zone 'Asia/Manila',(day+time '17:00') at time zone 'Asia/Manila'),

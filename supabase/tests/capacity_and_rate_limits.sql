@@ -11,8 +11,8 @@ begin
  select id into b from public.branches where slug='santa-rosa';
  select id into s from public.services where name='Oral Prophylaxis';
  start_time:=(day+time '09:00') at time zone 'Asia/Manila';
- update private.branch_schedule_settings set opening_days=array[0,1,2,3,4,5,6],opens_at='09:00',closes_at='18:00',chairs=1,lead_minutes=0,horizon_days=100,step_minutes=5 where branch_id=b;
- update private.branch_service_settings set enabled=true,duration_minutes=5,buffer_minutes=0 where branch_id=b and service_id=s;
+ insert into private.branch_schedule_settings values(b,array[0,1,2,3,4,5,6],'09:00','18:00',1,0,100,5) on conflict(branch_id) do update set opening_days=excluded.opening_days,opens_at=excluded.opens_at,closes_at=excluded.closes_at,chairs=excluded.chairs,lead_minutes=excluded.lead_minutes,horizon_days=excluded.horizon_days,step_minutes=excluded.step_minutes;
+ insert into private.branch_service_settings values(b,s,5,0,true) on conflict(branch_id,service_id) do update set duration_minutes=excluded.duration_minutes,buffer_minutes=excluded.buffer_minutes,enabled=true;
  delete from private.service_resources where branch_id=b and service_id=s;
  insert into public.dentists(id,name) values(d,'Synthetic capacity benchmark');
  insert into private.dentist_rules values(d,0,true);

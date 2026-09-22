@@ -38,3 +38,29 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: Build
         run: npm run build
+
+  database-checks:
+    name: Fresh migrations and database regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Start disposable local Supabase
+        run: npx supabase start --exclude studio,logflare,vector,imgproxy,storage-api,realtime,edge-runtime,supavisor,postgres-meta
+      - name: Replay migrations without demo data
+        run: npx supabase db reset --local --no-seed
+      - name: Run rollback-wrapped database tests
+        run: npm run test:database
+      - name: Stop disposable stack
+        if: always()
+        run: npx supabase stop --no-backup
