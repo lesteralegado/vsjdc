@@ -1,6 +1,6 @@
 # V. San Juan Dental Clinic UI
 
-The existing React, TypeScript, Vite, and Tailwind scaffold now renders the clinic UI. No runtime dependencies were added. Visual reference: the user-supplied four-page Figma PDF. The live Figma file could not be inspected because the connected account reached its MCP call limit.
+The existing React, TypeScript, Vite, and Tailwind scaffold now renders the clinic UI. The UI uses no added UI library; Sprint 1 added the Supabase client for data and authentication. Visual reference: the user-supplied four-page Figma PDF. The live Figma file could not be inspected because the connected account reached its MCP call limit.
 
 ## Run locally
 
@@ -26,7 +26,7 @@ npm.cmd run lint
 | `/appointments/book` | Clinic location, service/schedule, patient, review, confirmation |
 | `/appointments/track` | Reference and mobile form; loading, not-found, error, and result components |
 | `/staff/login` | Staff sign-in form |
-| `/staff/dashboard` | Clearly labeled dashboard UI preview with section navigation |
+| `/staff/dashboard` | Protected staff dashboard with branch access and read-only records |
 
 Legacy-style aliases `/book-appointment`, `/track-appointment`, and `/staff-login` are included. Native links support back, forward, refresh, and deep links. A production static host must rewrite application paths to `index.html`.
 
@@ -36,7 +36,7 @@ Patients choose the branch, service, date, and time only. Dentist profiles are i
 
 This workspace did not contain Supabase code, credentials, a database schema, authentication, or scheduling logic. The UI does not simulate successful authentication or create fake appointments. There are no invented patients, dentist identities, dashboard counts, or available appointment times.
 
-`src/lib/clinicApi.ts` defines the typed integration boundary for services, dentist profiles, availability, booking, tracking, and sign-in. Its disconnected implementation rejects operations. Supply the actual backend implementation before enabling live booking. The API must enforce availability and appointment conflict checks, and protect tracking data and staff access. The current dashboard is exclusively an empty public UI preview; it is not an authenticated staff application. Session handling, authorization, staff record loading, and sign-out remain backend integration work.
+Sprint 1 connects the published catalogue and staff authentication through src/lib/clinicApi.ts and src/lib/staffApi.ts. Staff dashboard access is checked against private database membership; RLS protects appointment reads. Booking and tracking use separate disabled capability flags until Sprint 2. See docs/sprint-1/README.md for verification and outstanding hosted Auth configuration.
 
 In disconnected mode:
 
