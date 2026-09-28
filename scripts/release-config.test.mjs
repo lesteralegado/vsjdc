@@ -20,6 +20,15 @@ test('secret keys and unreviewed VITE variables are rejected', () => {
 })
 test('missing settings and implicit target fail closed', () => assert.ok(releaseErrors({}, undefined).length >= 5))
 test('public Vercel deployment metadata passes without allowing arbitrary platform secrets', () => {
-  assert.deepEqual(releaseErrors({ ...valid, VITE_VERCEL_ENV: 'preview', VITE_VERCEL_URL: 'clinic.vercel.app', VITE_VERCEL_GIT_COMMIT_SHA: 'fixture' }, 'preview'), [])
+  assert.deepEqual(releaseErrors({
+    ...valid,
+    VITE_VERCEL_ENV: 'preview',
+    VITE_VERCEL_URL: 'clinic.vercel.app',
+    VITE_VERCEL_GIT_COMMIT_SHA: 'fixture',
+    VITE_VERCEL_GIT_PREVIOUS_SHA: 'previous-fixture',
+    VITE_VERCEL_PROJECT_ID: 'project-fixture',
+    VITE_VERCEL_DEPLOYMENT_ID: 'deployment-fixture',
+    VITE_VERCEL_OBSERVABILITY_CLIENT_CONFIG: '{"dsn":"public-fixture"}',
+  }, 'preview'), [])
   assert.ok(releaseErrors({ ...valid, VITE_VERCEL_TOKEN: 'fixture' }, 'preview').includes('Unreviewed browser variable: VITE_VERCEL_TOKEN'))
 })

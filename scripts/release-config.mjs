@@ -2,7 +2,7 @@ export function releaseErrors(env, target) {
   const errors = []
   const allowed = new Set(['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_DEMO_DATA', 'VITE_DEMO_APPOINTMENT_DATE', 'VITE_BOOKING_ENABLED', 'VITE_TURNSTILE_SITE_KEY'])
   // Explicit public Vercel metadata, not a blanket VITE_VERCEL_* exception.
-  const platform = ['ENV', 'TARGET_ENV', 'URL', 'BRANCH_URL', 'PROJECT_PRODUCTION_URL', 'HASH_SALT', 'GIT_PROVIDER', 'GIT_REPO_SLUG', 'GIT_REPO_OWNER', 'GIT_REPO_ID', 'GIT_COMMIT_REF', 'GIT_COMMIT_SHA', 'GIT_COMMIT_MESSAGE', 'GIT_COMMIT_AUTHOR_LOGIN', 'GIT_COMMIT_AUTHOR_NAME', 'GIT_PULL_REQUEST_ID']
+  const platform = ['ENV', 'TARGET_ENV', 'URL', 'BRANCH_URL', 'PROJECT_PRODUCTION_URL', 'PROJECT_ID', 'DEPLOYMENT_ID', 'HASH_SALT', 'OBSERVABILITY_CLIENT_CONFIG', 'GIT_PROVIDER', 'GIT_REPO_SLUG', 'GIT_REPO_OWNER', 'GIT_REPO_ID', 'GIT_COMMIT_REF', 'GIT_COMMIT_SHA', 'GIT_PREVIOUS_SHA', 'GIT_COMMIT_MESSAGE', 'GIT_COMMIT_AUTHOR_LOGIN', 'GIT_COMMIT_AUTHOR_NAME', 'GIT_PULL_REQUEST_ID']
   for (const name of platform) allowed.add(`VITE_VERCEL_${name}`)
   for (const key of Object.keys(env)) {
     if (key.startsWith('VITE_') && !allowed.has(key)) errors.push(`Unreviewed browser variable: ${key}`)
